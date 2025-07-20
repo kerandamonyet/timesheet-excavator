@@ -7,6 +7,8 @@ import { db } from "@/firebase/config";
 import { collection, getDocs, query, where } from "firebase/firestore";
 import dayjs from "dayjs";
 import "dayjs/locale/id";
+import { jsPDF } from "jspdf";
+import autoTable from "jspdf-autotable"; // Impor fungsi autoTable secara langsung
 
 dayjs.locale("id");
 
@@ -166,6 +168,99 @@ export default function MonthlyReportDetail() {
     document.body.removeChild(a);
     window.URL.revokeObjectURL(url);
   }, [reportData.excavators, monthName]);
+
+  // Fungsi export PDF yang diperbaiki
+  const exportToPDF = useCallback(() => {
+    const doc = new jsPDF();
+
+    // Judul dokumen
+    doc.setFontSize(16);
+    doc.text(`Laporan Detail Excavator ${monthName}`, 14, 15);
+
+    // Tabel ringkasan excavator
+    const summaryHeaders = [
+      "Nama Excavator",
+      "Hari Operasi",
+      "Total Jam",
+      "Rata² Jam/Hari",
+      "Total Pembayaran",
+    ];
+
+    const summaryData = reportData.excavators.map((excavator) => [
+      excavator.name,
+      excavator.workingDays,
+      Math.round(excavator.totalHours * 100) / 100,
+      Math.round(excavator.averageHours * 100) / 100,
+      formatCurrency(excavator.totalPay),
+    ]);
+
+    // Gunakan fungsi autoTable secara langsung
+    autoTable(doc, {
+      head: [summaryHeaders],
+      body: summaryData,
+      startY: 25,
+      theme: "grid",
+      headStyles: {
+        fillColor: [41, 128, 185],
+        textColor: 255,
+        fontStyle: "bold",
+      },
+    });
+
+    // Tabel detail untuk setiap excavator
+    reportData.excavators.forEach((excavator) => {
+      doc.addPage();
+
+      // Subjudul excavator
+      doc.setFontSize(14);
+      doc.text(`Detail Operasi: ${excavator.name}`, 14, 15);
+
+      const detailHeaders = [
+        "Tanggal",
+        "Mulai",
+        "Selesai",
+        "Jam Reguler",
+        "Jam Lembur",
+        "Total Jam",
+        "Gaji Reguler",
+        "Gaji Lembur",
+        "Total Pembayaran",
+      ];
+
+      const detailData = excavator.records.map((record) => {
+        const workHours = record.workHours || 0;
+        const overtimeHours = record.overtimeHours || 0;
+        const totalHours = workHours + overtimeHours;
+
+        return [
+          dayjs(record.date).format("DD MMM YYYY"),
+          formatTime(record.startTime),
+          formatTime(record.endTime),
+          workHours,
+          overtimeHours,
+          totalHours,
+          formatCurrency(record.totalRegularPay || 0),
+          formatCurrency(record.totalOvertimePay || 0),
+          formatCurrency(record.totalPay || 0),
+        ];
+      });
+
+      autoTable(doc, {
+        head: [detailHeaders],
+        body: detailData,
+        startY: 20,
+        theme: "grid",
+        headStyles: {
+          fillColor: [52, 152, 219],
+          textColor: 255,
+          fontStyle: "bold",
+        },
+      });
+    });
+
+    // Simpan PDF
+    doc.save(`Laporan_Excavator_${monthName.replace(/ /g, "_")}.pdf`);
+  }, [reportData.excavators, monthName, formatCurrency, formatTime]);
 
   if (loading) {
     return (
@@ -487,12 +582,13 @@ export default function MonthlyReportDetail() {
         )}
       </div>
 
-      {/* Export Section */}
+      {/* Export Section - Tambahkan tombol PDF */}
       <div className="mt-8 bg-white rounded-xl shadow-sm border border-gray-200 p-6 no-print">
         <h3 className="text-lg font-medium text-gray-900 mb-4">
           Ekspor Laporan
         </h3>
         <div className="flex flex-wrap gap-4">
+          {/* Tombol Export CSV */}
           <button
             onClick={exportToCSV}
             className="inline-flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors"
@@ -507,6 +603,22 @@ export default function MonthlyReportDetail() {
             Ekspor CSV
           </button>
 
+          {/* Tombol Export PDF (Baru) */}
+          <button
+            onClick={exportToPDF}
+            className="inline-flex items-center gap-2 bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors"
+          >
+            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+              <path
+                fillRule="evenodd"
+                d="M5 4v3H4a2 2 0 00-2 2v3a2 2 0 002 2h1v2a2 2 0 002 2h6a2 2 0 002-2v-2h1a2 2 0 002-2V9a2 2 0 00-2-2h-1V4a2 2 0 00-2-2H7a2 2 0 00-2 2zm8 0H7v3h6V4zm0 8H7v4h6v-4z"
+                clipRule="evenodd"
+              />
+            </svg>
+            Ekspor PDF
+          </button>
+
+          {/* Tombol Print (sudah ada) */}
           <button
             onClick={() => {
               window.print();
