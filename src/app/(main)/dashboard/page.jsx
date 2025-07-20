@@ -1,14 +1,116 @@
 "use client";
 
 import { Hammer, CalendarClock, Wallet } from "lucide-react";
-import React from "react";
+import React, { useEffect, useState } from "react";
 import MainMenu from "../../../components/MainMenu";
+import { db } from "@/firebase/config";
+import { collection, getDocs, query, where } from "firebase/firestore";
+import dayjs from "dayjs";
+import "dayjs/locale/id";
+
+dayjs.locale("id");
 
 const DashboardPage = () => {
-  // Simulasi data statis — Anda bisa ambil dari Firestore nanti
-  const totalExcavators = 6;
-  const totalHours = 132;
-  const estimatedSalary = 38500000;
+  const [stats, setStats] = useState({
+    totalExcavators: 0,
+    totalHours: 0,
+    estimatedSalary: 0,
+    loading: true,
+  });
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        // 1. Ambil jumlah total excavator
+        const excavatorsSnapshot = await getDocs(collection(db, "excavators"));
+        const totalExcavators = excavatorsSnapshot.size;
+
+        // 2. Hitung jam kerja dan gaji bulan ini
+        const currentMonth = dayjs().format("MM");
+        const currentYear = dayjs().format("YYYY");
+
+        const startDate = dayjs(`${currentYear}-${currentMonth}-01`).format(
+          "YYYY-MM-DD"
+        );
+        const endDate = dayjs(`${currentYear}-${currentMonth}-01`)
+          .endOf("month")
+          .format("YYYY-MM-DD");
+
+        const q = query(
+          collection(db, "timesheets"),
+          where("date", ">=", startDate),
+          where("date", "<=", endDate)
+        );
+
+        const timesheetsSnapshot = await getDocs(q);
+
+        let totalHours = 0;
+        let estimatedSalary = 0;
+
+        timesheetsSnapshot.forEach((doc) => {
+          const data = doc.data();
+          const workHours = data.workHours || 0;
+          const overtimeHours = data.overtimeHours || 0;
+          const totalPay = data.totalPay || 0;
+
+          totalHours += workHours + overtimeHours;
+          estimatedSalary += totalPay;
+        });
+
+        setStats({
+          totalExcavators,
+          totalHours: Math.round(totalHours * 100) / 100,
+          estimatedSalary,
+          loading: false,
+        });
+      } catch (error) {
+        console.error("Error fetching dashboard data:", error);
+        setStats((prev) => ({ ...prev, loading: false }));
+      }
+    };
+
+    fetchData();
+  }, []);
+
+  const formatCurrency = (amount) => {
+    return new Intl.NumberFormat("id-ID", {
+      style: "currency",
+      currency: "IDR",
+      minimumFractionDigits: 0,
+    }).format(amount);
+  };
+
+  if (stats.loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 p-4">
+        <div className="mb-6 text-center">
+          <h1 className="text-2xl font-bold text-indigo-700">
+            Dashboard Admin
+          </h1>
+          <p className="text-sm text-gray-600">Memuat data...</p>
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          {[...Array(3)].map((_, i) => (
+            <div
+              key={i}
+              className="bg-white rounded-xl shadow p-4 border border-gray-100 animate-pulse"
+            >
+              <div className="flex items-center gap-4">
+                <div className="bg-gray-200 rounded-full w-12 h-12"></div>
+                <div className="flex-1">
+                  <div className="h-4 bg-gray-200 rounded w-1/2 mb-2"></div>
+                  <div className="h-6 bg-gray-300 rounded w-3/4"></div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <MainMenu />
+      </div>
+    );
+  }
 
   return (
     <>
@@ -33,7 +135,7 @@ const DashboardPage = () => {
             <div>
               <p className="text-sm text-gray-500">Total Alat</p>
               <h2 className="text-xl font-semibold text-indigo-800">
-                {totalExcavators}
+                {stats.totalExcavators}
               </h2>
             </div>
           </div>
@@ -46,7 +148,7 @@ const DashboardPage = () => {
             <div>
               <p className="text-sm text-gray-500">Total Jam Bulan Ini</p>
               <h2 className="text-xl font-semibold text-purple-800">
-                {totalHours} jam
+                {stats.totalHours} jam
               </h2>
             </div>
           </div>
@@ -59,7 +161,7 @@ const DashboardPage = () => {
             <div>
               <p className="text-sm text-gray-500">Estimasi Gaji Bulanan</p>
               <h2 className="text-xl font-semibold text-pink-800">
-                Rp {estimatedSalary.toLocaleString("id-ID")}
+                {formatCurrency(stats.estimatedSalary)}
               </h2>
             </div>
           </div>
