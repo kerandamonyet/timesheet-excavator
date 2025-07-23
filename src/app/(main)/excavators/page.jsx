@@ -1,5 +1,6 @@
 "use client";
 
+import { withAuthGuard } from "@/firebase/withAuthGuard";
 import { useEffect, useState } from "react";
 import {
   collection,
@@ -23,7 +24,7 @@ import {
 } from "lucide-react";
 import Swal from "sweetalert2";
 
-export default function ExcavatorPage() {
+function ExcavatorPage() {
   // State untuk form create dan edit
   const [form, setForm] = useState({
     name: "",
@@ -780,3 +781,5 @@ export default function ExcavatorPage() {
     </div>
   );
 }
+
+export default withAuthGuard(ExcavatorPage);

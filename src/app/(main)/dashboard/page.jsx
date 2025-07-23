@@ -1,5 +1,6 @@
 "use client";
 
+import { withAuthGuard } from "@/firebase/withAuthGuard";
 import { Hammer, CalendarClock, Wallet } from "lucide-react";
 import React, { useEffect, useState } from "react";
 import MainMenu from "../../../components/MainMenu";
@@ -184,4 +185,4 @@ const DashboardPage = () => {
   );
 };
 
-export default DashboardPage;
+export default withAuthGuard(DashboardPage);
