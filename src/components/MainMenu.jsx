@@ -8,6 +8,7 @@ import {
   Settings,
   ClipboardList,
   FileBarChart2,
+  HandCoins,
   LogOut,
 } from "lucide-react";
 import { signOut } from "firebase/auth";
@@ -22,6 +23,7 @@ const menu = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { name: "Excavator", href: "/excavators", icon: Settings },
   { name: "Absensi", href: "/timesheets", icon: ClipboardList },
+  { name: "Sewa", href: "/rents", icon: HandCoins },
   { name: "Laporan", href: "/reports", icon: FileBarChart2 },
 ];
 

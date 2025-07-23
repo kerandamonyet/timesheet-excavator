@@ -1,5 +1,6 @@
 "use client";
 
+import { withAuthGuard } from "@/firebase/withAuthGuard";
 import { useEffect, useState, useCallback } from "react";
 import { db } from "@/firebase/config";
 import {
@@ -248,7 +249,7 @@ const formatDate = (dateString) => {
   return new Date(dateString).toLocaleDateString("id-ID", options);
 };
 
-export default function TimesheetPage() {
+function TimesheetPage() {
   const [excavators, setExcavators] = useState([]);
   const [timesheets, setTimesheets] = useState([]);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -674,3 +675,5 @@ export default function TimesheetPage() {
     </div>
   );
 }
+
+export default withAuthGuard(TimesheetPage);

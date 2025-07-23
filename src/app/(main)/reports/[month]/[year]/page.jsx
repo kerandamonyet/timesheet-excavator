@@ -1,6 +1,7 @@
 // File: app/reports/[month]/[year]/page.jsx
 "use client";
 
+import { withAuthGuard } from "@/firebase/withAuthGuard";
 import React, { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { db } from "@/firebase/config";
@@ -12,7 +13,7 @@ import autoTable from "jspdf-autotable"; // Impor fungsi autoTable secara langsu
 
 dayjs.locale("id");
 
-export default function MonthlyReportDetail() {
+function MonthlyReportDetail() {
   const params = useParams();
   const router = useRouter();
   const { month, year } = params;
@@ -655,3 +656,5 @@ export default function MonthlyReportDetail() {
     </div>
   );
 }
+
+export default withAuthGuard(MonthlyReportDetail);

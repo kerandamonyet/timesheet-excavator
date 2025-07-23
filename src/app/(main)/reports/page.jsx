@@ -1,5 +1,6 @@
 "use client";
 
+import { withAuthGuard } from "@/firebase/withAuthGuard";
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { db } from "@/firebase/config";
@@ -131,7 +132,7 @@ const ReportMonthCard = ({ monthData, formatCurrency }) => (
   </Link>
 );
 
-export default function ReportsPage() {
+function ReportsPage() {
   const [availableMonths, setAvailableMonths] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -373,3 +374,5 @@ export default function ReportsPage() {
     </div>
   );
 }
+
+export default withAuthGuard(ReportsPage);
