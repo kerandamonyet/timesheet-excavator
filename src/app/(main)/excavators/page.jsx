@@ -23,28 +23,35 @@ import {
   Save,
 } from "lucide-react";
 import Swal from "sweetalert2";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import * as z from "zod";
+
+// --- Zod Schema for Validation ---
+// Definisikan opsi status yang valid
+const STATUS_OPTIONS = ["Tersedia", "Perbaikan"];
+
+const excavatorSchema = z.object({
+  id: z.string().optional(), // Tambahkan ID untuk kebutuhan edit
+  name: z.string().min(1, "Nama excavator wajib diisi."),
+  brand: z.string().min(1, "Merek wajib diisi."),
+  type: z.string().optional(),
+  operatorName: z.string().optional(),
+  regularRatePerHour: z.preprocess(
+    (val) => Number(val),
+    z.number().min(0, "Tarif regular tidak boleh negatif.").default(0)
+  ),
+  overtimeRatePerHour: z.preprocess(
+    (val) => Number(val),
+    z.number().min(0, "Tarif lembur tidak boleh negatif.").default(0)
+  ),
+  // Gunakan z.enum untuk memvalidasi status dengan opsi yang telah ditentukan
+  status: z.enum(STATUS_OPTIONS, {
+    errorMap: () => ({ message: "Status wajib diisi dan harus valid." }),
+  }),
+});
 
 function ExcavatorPage() {
-  // State untuk form create dan edit
-  const [form, setForm] = useState({
-    name: "",
-    brand: "",
-    type: "",
-    operatorName: "",
-    regularRatePerHour: "",
-    overtimeRatePerHour: "",
-  });
-
-  const [editForm, setEditForm] = useState({
-    id: "",
-    name: "",
-    brand: "",
-    type: "",
-    operatorName: "",
-    regularRatePerHour: "",
-    overtimeRatePerHour: "",
-  });
-
   const [excavators, setExcavators] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -55,15 +62,44 @@ function ExcavatorPage() {
     direction: "asc",
   });
 
-  // Initial form state for resetting
-  const initialFormState = {
-    name: "",
-    brand: "",
-    type: "",
-    operatorName: "",
-    regularRatePerHour: "",
-    overtimeRatePerHour: "",
-  };
+  // --- React Hook Form for Create Form ---
+  const {
+    register: registerCreate,
+    handleSubmit: handleSubmitCreate,
+    reset: resetCreateForm,
+    formState: { errors: createErrors },
+  } = useForm({
+    resolver: zodResolver(excavatorSchema),
+    defaultValues: {
+      name: "",
+      brand: "",
+      type: "",
+      operatorName: "",
+      regularRatePerHour: 0,
+      overtimeRatePerHour: 0,
+      status: "Tersedia", // Set default status
+    },
+  });
+
+  // --- React Hook Form for Edit Form ---
+  const {
+    register: registerEdit,
+    handleSubmit: handleSubmitEdit,
+    reset: resetEditForm,
+    setValue: setEditValue, // To set values when opening the edit modal
+    formState: { errors: editErrors },
+  } = useForm({
+    resolver: zodResolver(excavatorSchema),
+    defaultValues: {
+      name: "",
+      brand: "",
+      type: "",
+      operatorName: "",
+      regularRatePerHour: 0,
+      overtimeRatePerHour: 0,
+      status: "",
+    },
+  });
 
   const fetchExcavators = async () => {
     try {
@@ -87,25 +123,10 @@ function ExcavatorPage() {
     fetchExcavators();
   }, []);
 
-  // Handle create form submit
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!form.name || !form.brand) {
-      Swal.fire({
-        icon: "warning",
-        title: "Data Tidak Lengkap",
-        text: "Nama dan merek excavator wajib diisi",
-        confirmButtonColor: "#4f46e5",
-      });
-      return;
-    }
-
+  // Handle create form submit using React Hook Form
+  const onSubmitCreate = async (data) => {
     try {
-      await addDoc(collection(db, "excavators"), {
-        ...form,
-        regularRatePerHour: Number(form.regularRatePerHour) || 0,
-        overtimeRatePerHour: Number(form.overtimeRatePerHour) || 0,
-      });
+      await addDoc(collection(db, "excavators"), data);
 
       Swal.fire({
         icon: "success",
@@ -115,7 +136,7 @@ function ExcavatorPage() {
         showConfirmButton: false,
       });
 
-      setForm(initialFormState);
+      resetCreateForm();
       setIsCreateModalOpen(false);
       fetchExcavators();
     } catch (error) {
@@ -128,28 +149,18 @@ function ExcavatorPage() {
     }
   };
 
-  // Handle edit form submit
-  const handleEditSubmit = async (e) => {
-    e.preventDefault();
-    if (!editForm.name || !editForm.brand) {
-      Swal.fire({
-        icon: "warning",
-        title: "Data Tidak Lengkap",
-        text: "Nama dan merek excavator wajib diisi",
-        confirmButtonColor: "#4f46e5",
-      });
-      return;
-    }
-
+  // Handle edit form submit using React Hook Form
+  const onSubmitEdit = async (data) => {
     try {
-      const excavatorRef = doc(db, "excavators", editForm.id);
+      const excavatorRef = doc(db, "excavators", data.id);
       await updateDoc(excavatorRef, {
-        name: editForm.name,
-        brand: editForm.brand,
-        type: editForm.type,
-        operatorName: editForm.operatorName,
-        regularRatePerHour: Number(editForm.regularRatePerHour) || 0,
-        overtimeRatePerHour: Number(editForm.overtimeRatePerHour) || 0,
+        name: data.name,
+        brand: data.brand,
+        type: data.type,
+        operatorName: data.operatorName,
+        regularRatePerHour: Number(data.regularRatePerHour),
+        overtimeRatePerHour: Number(data.overtimeRatePerHour),
+        status: data.status,
       });
 
       Swal.fire({
@@ -230,7 +241,8 @@ function ExcavatorPage() {
       ex.brand.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (ex.type && ex.type.toLowerCase().includes(searchTerm.toLowerCase())) ||
       (ex.operatorName &&
-        ex.operatorName.toLowerCase().includes(searchTerm.toLowerCase()))
+        ex.operatorName.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (ex.status && ex.status.toLowerCase().includes(searchTerm.toLowerCase())) // Tambahkan filter untuk status
   );
 
   const formatCurrency = (amount) => {
@@ -244,31 +256,43 @@ function ExcavatorPage() {
   // Open create modal
   const openCreateModal = () => {
     setIsCreateModalOpen(true);
+    resetCreateForm(); // Reset form when opening
   };
 
   // Close create modal
   const closeCreateModal = () => {
     setIsCreateModalOpen(false);
-    setForm(initialFormState);
+    resetCreateForm();
   };
 
-  // Open edit modal and populate form
+  // Open edit modal and populate form using setValue from React Hook Form
   const openEditModal = (excavator) => {
-    setEditForm({
-      id: excavator.id,
-      name: excavator.name,
-      brand: excavator.brand,
-      type: excavator.type || "",
-      operatorName: excavator.operatorName || "",
-      regularRatePerHour: excavator.regularRatePerHour.toString(),
-      overtimeRatePerHour: excavator.overtimeRatePerHour.toString(),
-    });
+    setEditValue("id", excavator.id); // Hidden input for ID
+    setEditValue("name", excavator.name);
+    setEditValue("brand", excavator.brand);
+    setEditValue("type", excavator.type || "");
+    setEditValue("operatorName", excavator.operatorName || "");
+    setEditValue("regularRatePerHour", excavator.regularRatePerHour);
+    setEditValue("overtimeRatePerHour", excavator.overtimeRatePerHour);
+    setEditValue("status", excavator.status);
     setIsEditModalOpen(true);
   };
 
   // Close edit modal
   const closeEditModal = () => {
     setIsEditModalOpen(false);
+    resetEditForm(); // Reset edit form on close
+  };
+
+  const getStatusBadgeClass = (status) => {
+    switch (status) {
+      case "Tersedia":
+        return "bg-green-100 text-green-800";
+      case "Perbaikan":
+        return "bg-yellow-100 text-yellow-800";
+      default:
+        return "bg-gray-100 text-gray-800";
+    }
   };
 
   return (
@@ -335,91 +359,132 @@ function ExcavatorPage() {
             </div>
 
             <form
-              onSubmit={handleSubmit}
+              onSubmit={handleSubmitCreate(onSubmitCreate)}
               className="p-6 grid grid-cols-1 gap-4"
             >
               <div>
                 <label className="block text-sm font-medium text-gray-800 mb-1">
-                  Nama Excavator *
+                  Nama Excavator <span className="text-red-500">*</span>
                 </label>
                 <input
                   placeholder="Contoh: CAT 320D"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-gray-800"
-                  value={form.name}
-                  onChange={(e) => setForm({ ...form, name: e.target.value })}
-                  required
+                  className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-gray-800 ${
+                    createErrors.name ? "border-red-500" : "border-gray-300"
+                  }`}
+                  {...registerCreate("name")}
                 />
+                {createErrors.name && (
+                  <p className="text-red-500 text-sm mt-1">
+                    {createErrors.name.message}
+                  </p>
+                )}
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-800 mb-1">
-                  Merek *
+                  Merek <span className="text-red-500">*</span>
                 </label>
                 <input
                   placeholder="Contoh: Caterpillar"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-gray-800"
-                  value={form.brand}
-                  onChange={(e) => setForm({ ...form, brand: e.target.value })}
-                  required
+                  className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-gray-800 ${
+                    createErrors.brand ? "border-red-500" : "border-gray-300"
+                  }`}
+                  {...registerCreate("brand")}
                 />
+                {createErrors.brand && (
+                  <p className="text-red-500 text-sm mt-1">
+                    {createErrors.brand.message}
+                  </p>
+                )}
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-800 mb-1">
-                  Tipe
+                  Tipe <span className="text-red-500">*</span>
                 </label>
                 <input
                   placeholder="Contoh: Mini Excavator"
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-gray-800"
-                  value={form.type}
-                  onChange={(e) => setForm({ ...form, type: e.target.value })}
+                  {...registerCreate("type")}
                 />
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-800 mb-1">
-                  Nama Operator
+                  Nama Operator <span className="text-red-500">*</span>
                 </label>
                 <input
                   placeholder="Nama operator"
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-gray-800"
-                  value={form.operatorName}
-                  onChange={(e) =>
-                    setForm({ ...form, operatorName: e.target.value })
-                  }
+                  {...registerCreate("operatorName")}
                 />
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-800 mb-1">
-                  Tarif Regular /Jam
+                  Tarif Regular /Jam <span className="text-red-500">*</span>
                 </label>
                 <input
                   placeholder="500000"
                   type="number"
                   min="0"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-gray-800"
-                  value={form.regularRatePerHour}
-                  onChange={(e) =>
-                    setForm({ ...form, regularRatePerHour: e.target.value })
-                  }
+                  className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-gray-800 ${
+                    createErrors.regularRatePerHour
+                      ? "border-red-500"
+                      : "border-gray-300"
+                  }`}
+                  {...registerCreate("regularRatePerHour")}
                 />
+                {createErrors.regularRatePerHour && (
+                  <p className="text-red-500 text-sm mt-1">
+                    {createErrors.regularRatePerHour.message}
+                  </p>
+                )}
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-800 mb-1">
-                  Tarif Lembur /Jam
+                  Tarif Lembur /Jam <span className="text-red-500">*</span>
                 </label>
                 <input
                   placeholder="750000"
                   type="number"
                   min="0"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-gray-800"
-                  value={form.overtimeRatePerHour}
-                  onChange={(e) =>
-                    setForm({ ...form, overtimeRatePerHour: e.target.value })
-                  }
+                  className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-gray-800 ${
+                    createErrors.overtimeRatePerHour
+                      ? "border-red-500"
+                      : "border-gray-300"
+                  }`}
+                  {...registerCreate("overtimeRatePerHour")}
                 />
+                {createErrors.overtimeRatePerHour && (
+                  <p className="text-red-500 text-sm mt-1">
+                    {createErrors.overtimeRatePerHour.message}
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-800 mb-1">
+                  Status <span className="text-red-500">*</span>
+                </label>
+                <select
+                  className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-gray-800 ${
+                    createErrors.status ? "border-red-500" : "border-gray-300"
+                  }`}
+                  {...registerCreate("status")}
+                >
+                  {STATUS_OPTIONS.map((option) => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
+                {createErrors.status && (
+                  <p className="text-red-500 text-sm mt-1">
+                    {createErrors.status.message}
+                  </p>
+                )}
               </div>
 
               <div className="flex gap-3 pt-4">
@@ -461,10 +526,10 @@ function ExcavatorPage() {
             </div>
 
             <form
-              onSubmit={handleEditSubmit}
+              onSubmit={handleSubmitEdit(onSubmitEdit)}
               className="p-6 grid grid-cols-1 gap-4"
             >
-              <input type="hidden" value={editForm.id} />
+              <input type="hidden" {...registerEdit("id")} />
 
               <div>
                 <label className="block text-sm font-medium text-gray-800 mb-1">
@@ -472,13 +537,16 @@ function ExcavatorPage() {
                 </label>
                 <input
                   placeholder="Contoh: CAT 320D"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-gray-800"
-                  value={editForm.name}
-                  onChange={(e) =>
-                    setEditForm({ ...editForm, name: e.target.value })
-                  }
-                  required
+                  className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-gray-800 ${
+                    editErrors.name ? "border-red-500" : "border-gray-300"
+                  }`}
+                  {...registerEdit("name")}
                 />
+                {editErrors.name && (
+                  <p className="text-red-500 text-sm mt-1">
+                    {editErrors.name.message}
+                  </p>
+                )}
               </div>
 
               <div>
@@ -487,13 +555,16 @@ function ExcavatorPage() {
                 </label>
                 <input
                   placeholder="Contoh: Caterpillar"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-gray-800"
-                  value={editForm.brand}
-                  onChange={(e) =>
-                    setEditForm({ ...editForm, brand: e.target.value })
-                  }
-                  required
+                  className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-gray-800 ${
+                    editErrors.brand ? "border-red-500" : "border-gray-300"
+                  }`}
+                  {...registerEdit("brand")}
                 />
+                {editErrors.brand && (
+                  <p className="text-red-500 text-sm mt-1">
+                    {editErrors.brand.message}
+                  </p>
+                )}
               </div>
 
               <div>
@@ -503,10 +574,7 @@ function ExcavatorPage() {
                 <input
                   placeholder="Contoh: Mini Excavator"
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-gray-800"
-                  value={editForm.type}
-                  onChange={(e) =>
-                    setEditForm({ ...editForm, type: e.target.value })
-                  }
+                  {...registerEdit("type")}
                 />
               </div>
 
@@ -517,10 +585,7 @@ function ExcavatorPage() {
                 <input
                   placeholder="Nama operator"
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-gray-800"
-                  value={editForm.operatorName}
-                  onChange={(e) =>
-                    setEditForm({ ...editForm, operatorName: e.target.value })
-                  }
+                  {...registerEdit("operatorName")}
                 />
               </div>
 
@@ -532,15 +597,18 @@ function ExcavatorPage() {
                   placeholder="500000"
                   type="number"
                   min="0"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-gray-800"
-                  value={editForm.regularRatePerHour}
-                  onChange={(e) =>
-                    setEditForm({
-                      ...editForm,
-                      regularRatePerHour: e.target.value,
-                    })
-                  }
+                  className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-gray-800 ${
+                    editErrors.regularRatePerHour
+                      ? "border-red-500"
+                      : "border-gray-300"
+                  }`}
+                  {...registerEdit("regularRatePerHour")}
                 />
+                {editErrors.regularRatePerHour && (
+                  <p className="text-red-500 text-sm mt-1">
+                    {editErrors.regularRatePerHour.message}
+                  </p>
+                )}
               </div>
 
               <div>
@@ -551,15 +619,41 @@ function ExcavatorPage() {
                   placeholder="750000"
                   type="number"
                   min="0"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-gray-800"
-                  value={editForm.overtimeRatePerHour}
-                  onChange={(e) =>
-                    setEditForm({
-                      ...editForm,
-                      overtimeRatePerHour: e.target.value,
-                    })
-                  }
+                  className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-gray-800 ${
+                    editErrors.overtimeRatePerHour
+                      ? "border-red-500"
+                      : "border-gray-300"
+                  }`}
+                  {...registerEdit("overtimeRatePerHour")}
                 />
+                {editErrors.overtimeRatePerHour && (
+                  <p className="text-red-500 text-sm mt-1">
+                    {editErrors.overtimeRatePerHour.message}
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-800 mb-1">
+                  Status *
+                </label>
+                <select
+                  className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-gray-800 ${
+                    editErrors.status ? "border-red-500" : "border-gray-300"
+                  }`}
+                  {...registerEdit("status")}
+                >
+                  {STATUS_OPTIONS.map((option) => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
+                {editErrors.status && (
+                  <p className="text-red-500 text-sm mt-1">
+                    {editErrors.status.message}
+                  </p>
+                )}
               </div>
 
               <div className="flex gap-3 pt-4">
@@ -650,6 +744,21 @@ function ExcavatorPage() {
                   </th>
                   <th
                     scope="col"
+                    className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider cursor-pointer hover:text-gray-900"
+                    onClick={() => handleSort("status")}
+                  >
+                    <div className="flex items-center gap-1">
+                      Status
+                      {sortConfig.key === "status" &&
+                        (sortConfig.direction === "asc" ? (
+                          <ChevronDown className="w-4 h-4" />
+                        ) : (
+                          <ChevronUp className="w-4 h-4" />
+                        ))}
+                    </div>
+                  </th>
+                  <th
+                    scope="col"
                     className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider"
                   >
                     Tarif
@@ -666,7 +775,7 @@ function ExcavatorPage() {
                 {filteredExcavators.length === 0 ? (
                   <tr>
                     <td
-                      colSpan="5"
+                      colSpan="6" // Ubah colspan menjadi 6 karena ada kolom status baru
                       className="px-6 py-12 text-center text-gray-600"
                     >
                       <div className="flex flex-col items-center justify-center">
@@ -714,6 +823,15 @@ function ExcavatorPage() {
                         <div className="text-sm text-gray-900">
                           {ex.operatorName || "-"}
                         </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span
+                          className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusBadgeClass(
+                            ex.status
+                          )}`}
+                        >
+                          {ex.status}
+                        </span>
                       </td>
                       <td className="px-6 py-4">
                         <div className="text-sm text-gray-900">
